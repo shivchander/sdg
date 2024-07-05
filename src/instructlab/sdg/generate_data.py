@@ -76,6 +76,31 @@ def _get_response(logger, synth_example):
         logger.warning(f"Failed to split generated q&a: {synth_example['output']}")
     return parts[1].strip() if len(parts) == 2 else parts[0].strip()
 
+def _convert_to_messages(sample):
+    """
+    Convert a sample dictionary to contain 'messages' and 'metadata' columns required for training.
+    """
+    # Create user query message
+    user_query = sample["inputs"]
+    # TODO: we can remove the combinecolumnsblock and combine them here for simplicity
+    # if "context" in sample:
+    #     user_query = f"{sample['context']}\n\n{sample['inputs']}"
+
+    sample["messages"] = [
+        {"content": user_query, "role": "user"},
+        {"content": sample["targets"], "role": "assistant"},
+    ]
+    metadata = {key: value for key, value in sample.items() if key not in ["messages", "inputs", "targets"]}
+    sample["metadata"] = json.dumps(metadata)
+
+    # keeping required keys for messages training format
+    sample = {
+    "messages": sample["messages"],
+    "metadata": sample["metadata"]
+    }
+
+    return sample
+
 
 def _gen_train_data(logger, machine_instruction_data, output_file_train):
     train_data = []
