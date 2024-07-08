@@ -7,7 +7,6 @@ import os
 
 # Local
 from .filterblock import FilterByValueBlock
-from .iterblock import IterBlock
 from .llmblock import LLMBlock
 from .utilblocks import CombineColumnsBlock
 
@@ -30,12 +29,11 @@ def _get_model_prompt(model_family):
 
 
 class Flow(ABC):
-    def __init__(self, client, model_family, model_id, num_iters, batched=True) -> None:
+    def __init__(self, client, model_family, model_id, num_instructions_to_generate) -> None:
         self.client = client
         self.model_family = model_family
         self.model_id = model_id
-        self.num_iters = num_iters
-        self.batched = batched
+        self.num_instructions_to_generate = num_instructions_to_generate
         self.sdg_base = resources.files(__package__)
 
     @abstractmethod
@@ -47,29 +45,21 @@ class _SimpleFlow(Flow):
     def get_flow(self) -> list:
         return [
             {
-                "block_type": IterBlock,
+                "block_type": LLMBlock,
                 "block_config": {
                     "block_name": "",  # must be set by subclass
-                    "num_iters": self.num_iters,
-                    "block_type": LLMBlock,
-                    "block_kwargs": {
-                        "block_name": "",  # must be set by subclass
-                        "config_path": "",  # must be set by subclass
-                        "client": self.client,
-                        "model_id": self.model_id,
-                        "model_prompt": _get_model_prompt(self.model_family),
-                        "output_cols": ["output"],
-                        "batch_kwargs": {
-                            "num_procs": 8,
-                            "batched": self.batched,
-                        },
-                    },
-                    "gen_kwargs": {
-                        "max_tokens": 2048,
-                        "temperature": 0.7,
-                    },
-                    "drop_duplicates": ["output"],
+                    "config_path": "",  # must be set by subclass
+                    "client": self.client,
+                    "model_id": self.model_id,
+                    "model_prompt": _get_model_prompt(self.model_family),
+                    "output_cols": ["output"],
                 },
+                "gen_kwargs": {
+                    "max_tokens": 2048,
+                    "temperature": 0.7,
+                    "n": self.num_instructions_to_generate
+                },
+                "drop_duplicates": ["output"],
             }
         ]
 
@@ -77,10 +67,9 @@ class _SimpleFlow(Flow):
 class SimpleKnowledgeFlow(_SimpleFlow):
     def get_flow(self) -> list:
         flow = super().get_flow()
-        flow[0]["block_config"]["block_kwargs"]["config_path"] = os.path.join(
+        flow[0]["block_config"]["config_path"] = os.path.join(
             self.sdg_base, "configs/knowledge/simple_generate_qa.yaml"
         )
-        flow[0]["block_config"]["block_kwargs"]["block_name"] = "gen_knowledge"
         flow[0]["block_config"]["block_name"] = "gen_knowledge"
         return flow
 
@@ -88,10 +77,9 @@ class SimpleKnowledgeFlow(_SimpleFlow):
 class SimpleFreeformSkillFlow(_SimpleFlow):
     def get_flow(self) -> list:
         flow = super().get_flow()
-        flow[0]["block_config"]["block_kwargs"]["config_path"] = os.path.join(
+        flow[0]["block_config"]["config_path"] = os.path.join(
             self.sdg_base, "configs/skills/simple_generate_qa_freeform.yaml"
         )
-        flow[0]["block_config"]["block_kwargs"]["block_name"] = "gen_skill_freeform"
         flow[0]["block_config"]["block_name"] = "gen_skill_freeform"
         return flow
 
@@ -99,10 +87,9 @@ class SimpleFreeformSkillFlow(_SimpleFlow):
 class SimpleGroundedSkillFlow(_SimpleFlow):
     def get_flow(self) -> list:
         flow = super().get_flow()
-        flow[0]["block_config"]["block_kwargs"]["config_path"] = os.path.join(
+        flow[0]["block_config"]["config_path"] = os.path.join(
             self.sdg_base, "configs/skills/simple_generate_qa_grounded.yaml"
         )
-        flow[0]["block_config"]["block_kwargs"]["block_name"] = "gen_skill_grounded"
         flow[0]["block_config"]["block_name"] = "gen_skill_grounded"
         return flow
 
@@ -122,10 +109,6 @@ class MMLUBenchFlow(Flow):
                     "model_id": self.model_id,
                     "model_prompt": _get_model_prompt(self.model_family),
                     "output_cols": ["mmlubench_question", "mmlubench_answer"],
-                    "batch_kwargs": {
-                        "num_procs": 8,
-                        "batched": self.batched,
-                    },
                 },
                 "gen_kwargs": {
                     "temperature": 0,
@@ -151,10 +134,6 @@ class SynthKnowledgeFlow(Flow):
                     "model_id": self.model_id,
                     "model_prompt": _get_model_prompt(self.model_family),
                     "output_cols": ["question", "response"],
-                    "batch_kwargs": {
-                        "num_procs": 8,
-                        "batched": self.batched,
-                    },
                     "parser_kwargs": {
                         "parser_name": "custom",
                         "parsing_pattern": r"\[(?:Question|QUESTION)\]\s*(.*?)\s*\[(?:Answer|ANSWER)\]\s*(.*?)\s*(?=\[(?:Question|QUESTION)\]|$)",
@@ -177,10 +156,6 @@ class SynthKnowledgeFlow(Flow):
                     "model_id": self.model_id,
                     "model_prompt": _get_model_prompt(self.model_family),
                     "output_cols": ["explanation", "judgment"],
-                    "batch_kwargs": {
-                        "num_procs": 8,
-                        "batched": self.batched,
-                    },
                 },
                 "gen_kwargs": {
                     "max_tokens": 2048,
@@ -210,10 +185,6 @@ class SynthKnowledgeFlow(Flow):
                     "model_id": self.model_id,
                     "model_prompt": _get_model_prompt(self.model_family),
                     "output_cols": ["feedback", "score"],
-                    "batch_kwargs": {
-                        "num_procs": 8,
-                        "batched": self.batched,
-                    },
                 },
                 "gen_kwargs": {
                     "max_tokens": 2048,
@@ -244,10 +215,6 @@ class SynthKnowledgeFlow(Flow):
                     "model_id": self.model_id,
                     "model_prompt": _get_model_prompt(self.model_family),
                     "output_cols": ["explanation", "rating"],
-                    "batch_kwargs": {
-                        "num_procs": 8,
-                        "batched": self.batched,
-                    },
                 },
                 "gen_kwargs": {
                     "max_tokens": 2048,
@@ -286,9 +253,7 @@ class SynthSkillsFlow(Flow):
                     "model_prompt": _get_model_prompt(self.model_family),
                     "output_cols": ["question"],
                     "batch_kwargs": {
-                        "num_procs": 8,
-                        "num_samples": 30,
-                        "batched": self.batched,
+                        "num_samples": self.num_instructions_to_generate,
                     },
                 },
                 "drop_duplicates": ["question"],
@@ -305,10 +270,6 @@ class SynthSkillsFlow(Flow):
                     "model_id": self.model_id,
                     "model_prompt": _get_model_prompt(self.model_family),
                     "output_cols": ["evaluation", "score"],
-                    "batch_kwargs": {
-                        "num_procs": 8,
-                        "batched": self.batched,
-                    },
                 },
             },
             {
@@ -337,10 +298,6 @@ class SynthSkillsFlow(Flow):
                     "model_id": self.model_id,
                     "model_prompt": _get_model_prompt(self.model_family),
                     "output_cols": ["response"],
-                    "batch_kwargs": {
-                        "num_procs": 8,
-                        "batched": self.batched,
-                    },
                 },
             },
             {
@@ -355,10 +312,6 @@ class SynthSkillsFlow(Flow):
                     "model_id": self.model_id,
                     "model_prompt": _get_model_prompt(self.model_family),
                     "output_cols": ["evaluation", "score"],
-                    "batch_kwargs": {
-                        "num_procs": 8,
-                        "batched": self.batched,
-                    },
                 },
             },
             {
@@ -382,31 +335,24 @@ class SynthGroundedSkillsFlow(Flow):
     def get_flow(self) -> list:
         return [
             {
-                "block_type": IterBlock,
+                "block_type": LLMBlock,
                 "block_config": {
-                    "block_name": "context_iter",
-                    "num_iters": 10,
-                    "block_type": LLMBlock,
-                    "block_kwargs": {
-                        "block_name": "gen_contexts",
-                        "config_path": os.path.join(
-                            self.sdg_base,
-                            "configs/skills/contexts.yaml",
-                        ),
-                        "client": self.client,
-                        "model_id": self.model_id,
-                        "model_prompt": _get_model_prompt(self.model_family),
-                        "output_cols": ["context"],
-                        "batch_kwargs": {
-                            "num_procs": 8,
-                            "batched": self.batched,
-                        },
-                    },
-                    "gen_kwargs": {
-                        "temperature": 0.7,
-                        "max_tokens": 2048,
-                    },
+                    "block_name": "gen_contexts",
+                    "config_path": os.path.join(
+                        self.sdg_base,
+                        "configs/skills/contexts.yaml",
+                    ),
+                    "client": self.client,
+                    "model_id": self.model_id,
+                    "model_prompt": _get_model_prompt(self.model_family),
+                    "output_cols": ["context"],
                 },
+                "gen_kwargs": {
+                    "temperature": 0.7,
+                    "max_tokens": 2048,
+                    "n": self.num_instructions_to_generate
+                },
+                "drop_duplicates": ["context"],
             },
             {
                 "block_type": LLMBlock,
@@ -421,8 +367,7 @@ class SynthGroundedSkillsFlow(Flow):
                     "model_prompt": _get_model_prompt(self.model_family),
                     "output_cols": ["question"],
                     "batch_kwargs": {
-                        "num_procs": 8,
-                        "batched": self.batched,
+                        "num_samples": 3,
                     },
                 },
                 "drop_duplicates": ["question"],
@@ -439,11 +384,6 @@ class SynthGroundedSkillsFlow(Flow):
                     "model_id": self.model_id,
                     "model_prompt": _get_model_prompt(self.model_family),
                     "output_cols": ["evaluation", "score"],
-                    "batch_kwargs": {
-                        "num_procs": 8,
-                        "batched": self.batched,
-                        "num_samples": 10,
-                    },
                 },
             },
             {
@@ -472,10 +412,6 @@ class SynthGroundedSkillsFlow(Flow):
                     "model_id": self.model_id,
                     "model_prompt": _get_model_prompt(self.model_family),
                     "output_cols": ["response"],
-                    "batch_kwargs": {
-                        "num_procs": 8,
-                        "batched": self.batched,
-                    },
                 },
             },
             {
@@ -490,10 +426,6 @@ class SynthGroundedSkillsFlow(Flow):
                     "model_id": self.model_id,
                     "model_prompt": _get_model_prompt(self.model_family),
                     "output_cols": ["evaluation", "score"],
-                    "batch_kwargs": {
-                        "num_procs": 8,
-                        "batched": self.batched,
-                    },
                 },
             },
             {

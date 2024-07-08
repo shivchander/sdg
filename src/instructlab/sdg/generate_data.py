@@ -178,7 +178,7 @@ def _gen_test_data(
             outfile.write("\n")
 
 
-def _sdg_init(pipeline, client, model_family, model_name, num_iters, batched):
+def _sdg_init(pipeline, client, model_family, model_name, num_instructions_to_generate):
     knowledge_flow_types = []
     freeform_skill_flow_types = []
     grounded_skill_flow_types = []
@@ -198,7 +198,7 @@ def _sdg_init(pipeline, client, model_family, model_name, num_iters, batched):
         [
             Pipeline(
                 flow_type(
-                    client, model_family, model_name, num_iters, batched
+                    client, model_family, model_name, num_instructions_to_generate
                 ).get_flow()
             )
             for flow_type in knowledge_flow_types
@@ -208,7 +208,7 @@ def _sdg_init(pipeline, client, model_family, model_name, num_iters, batched):
         [
             Pipeline(
                 flow_type(
-                    client, model_family, model_name, num_iters, batched
+                    client, model_family, model_name, num_instructions_to_generate
                 ).get_flow()
             )
             for flow_type in freeform_skill_flow_types
@@ -218,7 +218,7 @@ def _sdg_init(pipeline, client, model_family, model_name, num_iters, batched):
         [
             Pipeline(
                 flow_type(
-                    client, model_family, model_name, num_iters, batched
+                    client, model_family, model_name, num_instructions_to_generate
                 ).get_flow()
             )
             for flow_type in grounded_skill_flow_types
@@ -302,14 +302,12 @@ def generate_data(
     # about whether we can turn this on (whether vllm is used or not)
 
     batched = False
-
     sdg_knowledge, sdg_freeform_skill, sdg_grounded_skill = _sdg_init(
         pipeline,
         client,
         model_family,
         model_name,
         num_instructions_to_generate,
-        batched,
     )
 
     if console_output:
@@ -324,7 +322,6 @@ def generate_data(
         if not samples:
             raise utils.GenerateException("Error: No samples found in leaf node.")
 
-        sdg = None
         if samples[0].get("document"):
             sdg = sdg_knowledge
         elif samples[0].get("context"):
